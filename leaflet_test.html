@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Leaflet Quick Start Guide Example</title>
+    <meta charset="utf-8" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.css" />
+    <link rel="stylesheet" href="leaflet_test.css" />
+</head>
+<body>
+	<div id="drop_zone">Drop SportChrono file here</div>
+	<output id="list"></output>
+
+	<script>
+		// Check for the various File API support.
+		if (window.File && window.FileReader && window.FileList && window.Blob) {
+  			// Great success! All the File APIs are supported.
+		} else {
+  			alert('The File APIs are not fully supported in this browser. Please try to reload with different one, e.g. Firefox 37');
+		}
+
+  		function handleFileSelect(evt) {
+    		evt.stopPropagation();
+    		evt.preventDefault();
+
+    		var files = evt.dataTransfer.files; // FileList object.
+
+    		// files is a FileList of File objects. List some properties.
+    		var output = [];
+    		if( f = files[0]) {
+    			if( f.type.match('text/csv')) {
+    				var reader = new FileReader();
+
+    				reader.onloadend = function(evt) {
+    					if(evt.target.readyState == FileReader.DONE) {
+    						if( evt.target.result.match('SPC-V0.01') ) {
+    							output.push('<li><strong>Current file: ', escape(f.name), '</strong> (', f.type || 'n/a', ') - ',
+                  					f.size, ' bytes, last modified: ',
+                  					f.lastModifiedDate ? f.lastModifiedDate.toLocaleDateString() : 'n/a',
+                  					'</li>');
+    							document.getElementById('list').innerHTML = '<ul>' + output.join('') + '</ul>';
+    							readSCFile( f);
+    						}
+    					}
+    				}
+
+    				var blob = f.slice(0, 9 || f.size);
+	    			reader.readAsText(blob);
+    			}
+    			else {
+    				alert('Invalid Porsche SportChrono file.');
+    			}
+    		}
+  		}
+
+  		function handleDragOver(evt) {
+    		evt.stopPropagation();
+    		evt.preventDefault();
+    		evt.dataTransfer.dropEffect = 'copy'; // Explicitly show this is a copy.
+  		}
+
+  		// Setup the dnd listeners.
+  		var dropZone = document.getElementById('drop_zone');
+  		dropZone.addEventListener('dragover', handleDragOver, false);
+  		dropZone.addEventListener('drop', handleFileSelect, false);
+	</script>
+
+    <div id="map" style="height: 600px"></div>
+
+    <script src="http://cdn.leafletjs.com/leaflet-0.7.3/leaflet.js"></script>
+    <script>
+        // map init
+        var mbUrl = 'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.png?access_token=pk.eyJ1Ijoic2NobWFlY2hlIiwiYSI6ImNqNTVmc3NvbzBvenUzM29hYW9jZXp0bG8ifQ.f9LIzhedtt9K8YwfpTcZdQ';
+            attribution = 'Map data &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors, <a href="http://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, Imagery © <a href="http://mapbox.com">Mapbox</a>';
+            streetLayer =    L.tileLayer(mbUrl, {id: 'mapbox.streets', attribution: attribution});
+            satLayer =       L.tileLayer(mbUrl, {id: 'mapbox.satellite', attribution: attribution});
+            satStreetLayer = L.tileLayer(mbUrl, {id: 'mapbox.streets-satellite', attribution: attribution});
+            lightLayer =     L.tileLayer(mbUrl, {id: 'mapbox.light', attribution: attribution});
+            darkLayer =      L.tileLayer(mbUrl, {id: 'mapbox.dark', attribution: attribution});
+            wheatpasteLayer =L.tileLayer(mbUrl, {id: 'mapbox.wheatpaste', attribution: attribution});
+            basicLayer =     L.tileLayer(mbUrl, {id: 'mapbox.streets-basic', attribution: attribution});
+            comicLayer =     L.tileLayer(mbUrl, {id: 'mapbox.comic', attribution: attribution});
+            outdoorsLayer =  L.tileLayer(mbUrl, {id: 'mapbox.outdoors', attribution: attribution});
+            sportsLayer =    L.tileLayer(mbUrl, {id: 'mapbox.run-bike-hike', attribution: attribution});
+            pencilLayer =    L.tileLayer(mbUrl, {id: 'mapbox.pencil', attribution: attribution});
+            piratesLayer =   L.tileLayer(mbUrl, {id: 'mapbox.pirates', attribution: attribution});
+            emeraldLayer =   L.tileLayer(mbUrl, {id: 'mapbox.emerald', attribution: attribution});
+            highcontrastLayer =L.tileLayer(mbUrl, {id: 'mapbox.high-contrast', attribution: attribution});
+
+            mapBaseLayers = {
+                "Streets" : streetLayer,
+                "Satellite" : satLayer,
+                "Mixed" : satStreetLayer,
+                "Light" : lightLayer,
+                "Dark" : darkLayer,
+                "Wheatpaste" : wheatpasteLayer,
+                "Basic" : basicLayer,
+                "Comic" : comicLayer,
+                "Outdoor" : outdoorsLayer,
+                "Sports" : sportsLayer,
+                "Pencil" : pencilLayer,
+                "Pirates" : piratesLayer,
+                "Emerald" : emeraldLayer,
+                "High Contrast" : highcontrastLayer
+            };
+
+        var map = L.map( 'map', {layers: streetLayer} ).setView( [48.83488, 9.15214], 16);
+        L.control.layers( mapBaseLayers).addTo(map);
+
+        var popup = L.popup();
+
+		function onMapClick(e) {
+    		popup
+        		.setLatLng(e.latlng)
+        		.setContent("You clicked the map at " + e.latlng.toString())
+        		.openOn(map);
+		}
+
+		map.on('click', onMapClick);
+
+
+        // read data from file
+        var track;
+
+        function getDecimalCoordinate( coordinate) {
+        	var degrees = parseFloat(coordinate[0]);
+        	var minutes = parseFloat(coordinate[1]);
+        	var seconds = parseFloat(coordinate[2]);
+        	return degrees + (minutes / 60) + (seconds / 3600);
+        }
+
+		function readSCFile( file)
+		{
+			if(track) {
+				map.removeLayer(track);
+			}
+
+        	var polyline = [];
+			var reader = new FileReader();
+
+			reader.onloadend = function(evt) {
+				if(evt.target.readyState == FileReader.DONE) {
+					var lines = evt.target.result.split(/\n/);
+
+					if( lines.length > 3)
+					{
+						var prevElements = lines[2].split(';');
+						var currElements = [];
+						var prevLat, prevLong, currLat, currLong;
+
+						for( i = 3; i <  lines.length; i++) {
+							currElements = lines[i].split(';');
+
+							if( !currElements || currElements.length < 16)
+								continue;
+
+							prevLat = getDecimalCoordinate( prevElements[15].trim().split(/[^0-9.]/));
+							prevLong = getDecimalCoordinate( prevElements[16].trim().split(/[^0-9.]/));
+							currLat = getDecimalCoordinate( currElements[15].trim().split(/[^0-9.]/));
+							currLong = getDecimalCoordinate( currElements[16].trim().split(/[^0-9.]/));
+
+							if( prevLat && prevLong && currLat && currLong)
+							{
+								polyline[polyline.length] = drawLineMinMax( [[prevLat, prevLong], [currLat, currLong]], parseFloat(currElements[11].replace(",",".")), 0, 8);
+							}
+
+							// store current line as previous line;
+							prevElements = currElements;
+						}
+
+						track = L.featureGroup( polyline).addTo(map);
+						map.fitBounds( track.getBounds());
+					}
+				}
+			}
+
+
+			reader.readAsText(file);
+		}
+
+        function drawLineMinMax( latlngs, value, minValue, maxValue)
+        {
+            var valPercent =  (value - minValue) / (maxValue - minValue);
+            if (valPercent > 1)
+                valPercent = 1;
+            else if (valPercent < 0)
+                valPercent = 0;
+
+            // to get yellow for 50% values we have to set r and g component to 255
+            // after the threshold r or g value will be reduced or increased by double amount
+            var red = (valPercent < 0.5) ? 255 : 510 * (1 - valPercent);
+            var redS = red << 16;
+
+            var green = (valPercent > 0.5) ? 255 : 510 * valPercent;
+            var greenS = green << 8;
+
+            var color = (redS + greenS).toString(16);
+            while( color.length < 6)
+            {
+                color = '0' + color;
+            }
+
+            color = '#' + color;
+
+            return L.polyline( latlngs, {color: color, opacity: 0.85});
+        }
+
+    </script>
+</body>
+</html>
